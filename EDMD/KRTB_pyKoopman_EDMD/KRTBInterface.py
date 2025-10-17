@@ -25,11 +25,11 @@ class KRTBInterface:
         if rand_seed:
             np.random.seed(rand_seed)
 
-        x = 2*np.random.random([num_traj, self.system.dim]) - 1 
+        init_x = 2*np.random.random([num_traj, self.system.dim]) - 1 
     
         trajectories, t = simulate_trajectories(
             system = self.system,
-            initial_points = x,
+            initial_points = init_x,
             T = T,
             dt = deltaT
         )
@@ -59,28 +59,77 @@ class KRTBInterface:
 
         return X, Y
 
-    def plot_trajectories(self, trajectories):
-        fig, ax = plt.subplots(figsize=(7, 7))
-        x_lim = [-2, 2]
-        y_lim = [-2, 2]
 
-        grid_x = np.linspace(x_lim[0], x_lim[1], 30)
-        grid_y = np.linspace(y_lim[0], y_lim[1], 30)
-        X, Y = np.meshgrid(grid_x, grid_y)
-        points = np.stack([X.ravel(), Y.ravel()], axis=-1)
-        vecs = np.array([self.system.ff(*pt) for pt in points])
-        U = vecs[:, 0].reshape(X.shape)
-        V = vecs[:, 1].reshape(X.shape)
-        ax.streamplot(X, Y, U, V, color="gray", density=1.0, linewidth=0.5, arrowsize=1)
-        
+    def plot_trajectories(self, trajectories, d1=None, d2=None, x_lim=[-2, 2], y_lim=[-2, 2]):
+        fig, ax = self._get_phase_portrait(d1=d1, d2=d2, x_lim=[-2, 2], y_lim=[-2, 2])
+
         for traj in trajectories:
             x1 = traj[:, 0]
             x2 = traj[:, 1]
             plt.plot(x1, x2, "-or")
+            
+        if self.system.dim > 2:
+            ax.set_xlabel(f"x{d1+1}")
+            ax.set_ylabel(f"x{d2+1}")
+        else:
+            ax.set_xlabel("x1")
+            ax.set_ylabel("x2")
 
-        ax.set_xlabel("x1")
-        ax.set_ylabel("x2")
-        ax.set_title(f"plot")
+        ax.set_title(f"Trajectory projection")
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+
+        plt.tight_layout()
+        plt.show()
+
+    def _get_phase_portrait(self, d1=None, d2=None, x_lim=[-2, 2], y_lim=[-2, 2]):
+        fig, ax = plt.subplots(figsize=(7, 7))
+
+        grid_x = np.linspace(x_lim[0], x_lim[1], 30)
+        grid_y = np.linspace(y_lim[0], y_lim[1], 30)
+        X, Y = np.meshgrid(grid_x, grid_y)
+        points_2d = np.stack([X.ravel(), Y.ravel()], axis=-1)
+
+        if self.system.dim > 2:
+            # Create n-dimensional points with zeros for other dimensions
+            points_nd = np.zeros((points_2d.shape[0], self.system.dim))
+            points_nd[:, d1] = points_2d[:, 0]
+            points_nd[:, d2] = points_2d[:, 1]
+
+            vecs = np.array([self.system.ff(*pt) for pt in points_nd])
+        elif self.system.dim == 2:
+            vecs = np.array([self.system.ff(*pt) for pt in points_2d])
+        else:
+            raise Exception("trajectories dimensions need to be at least 2")
+        
+        U = vecs[:, 0].reshape(X.shape)
+        V = vecs[:, 1].reshape(X.shape)
+        ax.streamplot(X, Y, U, V, color="gray", density=1.0, linewidth=0.5, arrowsize=1)
+
+        return fig, ax
+
+    def plot_koopman_sim(self, koop_model, sim_traj, d1=None, d2=None, x_lim=[-2, 2], y_lim=[-2, 2]):
+
+        fig, ax = self._get_phase_portrait(d1=d1, d2=d2, x_lim=[-2, 2], y_lim=[-2, 2])
+
+        if self.system.dim == 2:
+            d1, d2 = 0, 1
+        
+        for traj in sim_traj:
+            koop_traj = koop_model.simulate(traj[0, :], n_steps=traj.shape[0])
+            
+            ax.plot(traj[:, d1], traj[:, d2], '-or')
+            ax.plot(koop_traj[:, d1], koop_traj[:, d2], '-og')
+
+        
+        if self.system.dim > 2:
+            ax.set_xlabel(f"x{d1+1}")
+            ax.set_ylabel(f"x{d2+1}")
+        else:
+            ax.set_xlabel("x1")
+            ax.set_ylabel("x2")
+
+        ax.set_title(f"Trajectory projection")
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
 
