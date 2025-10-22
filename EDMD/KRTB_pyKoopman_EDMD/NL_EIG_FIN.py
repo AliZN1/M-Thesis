@@ -2,10 +2,13 @@ import os
 import numpy as np
 import pykoopman as pk
 from pykoopman import regression
-from KRTBInterface import KRTBInterface
+from KRTB_pyKoopman import KRTBInterface
+from KRTB_pyKoopman import KoopmanPlot as kp
 from pykoopman import observables as obs
 import matplotlib.pyplot as plt
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 def ex5_plot_principal_eigenfun(model_EDMD, psi1_ind, psi2_ind):
     fig, axs = plt.subplots(1, 2, figsize=(14, 7))
@@ -62,7 +65,7 @@ def main():
     #     npzFile_path = sim_traj_path
     # )
     sim_traj = krtb.read_sim_trajectories(sim_traj_path)
-    X, Y = krtb.form_data_snapshots(sim_traj)
+    X, Y = krtb.form_data_snapshots(sim_traj[:900, :, :])
     
     # ----------------- Displays simulated trajectories
     # krtb.plot_trajectories(sim_traj)
@@ -76,20 +79,48 @@ def main():
     model_EDMD.fit(X, Y, dt=dt)
 
     # ----------------- prints eigenvalues
-    # for i, eig_v in enumerate(model_EDMD.continuous_lamda_array):
-    #     print(f"cont eigenvalue {i} = {eig_v:.2f}")
+    for i, eig_v in enumerate(model_EDMD.continuous_lamda_array):
+        print(f"cont eigenvalue {i} = {eig_v}")
     
     # ----------------- plots analytical and estimated principal eigenfunctions 
     # ex5_plot_principal_eigenfun(model_EDMD, psi1_ind=0, psi2_ind=7)
 
-    # ----------------- check validity of eigenfunctions
-    # efun_index, linearity_error = model_EDMD.validity_check(np.arange(0, T, dt), X[:200, :])
-    # print("Ranking of eigenfunctions by linearity error: ", efun_index)
-    # print("Corresponding linearity error: ", linearity_error)
-
     # ----------------- compare simulated and koopman prediction trajectories
-    unseen_sim_traj = krtb.get_sim_trajectories(num_traj = 2, T = 1, deltaT = dt, rand_seed = 11)
-    krtb.plot_koopman_sim(model_EDMD, sim_traj=unseen_sim_traj)
+    # unseen_sim_traj = krtb.get_sim_trajectories(num_traj = 2, T = 1, deltaT = dt, rand_seed = 11)
+    # krtb.plot_koopman_sim(model_EDMD, sim_traj=unseen_sim_traj)
+
+    # ----------------- check validity of eigenfunctions
+    efun_index_mean, mean_err = krtb.check_ef_validity(model_EDMD, sim_traj[900: , :, :], T, dt)
+    # print("Average linearity error per eigenfunction:\n", mean_err)
+    # print("=" * 60)
+    # print("Eigenfunction ranking (best to worst):\n", efun_index_mean)
+    # print("=" * 60)
+    
+    # ----------------- time-to-reach bounds
+    time_intervals, status = krtb.time_reach_bounds(model_EDMD, valid_ef_inx=np.array([0, 7]))
+    
+    print(f"Status: {status}")
+    if len(time_intervals) > 0:
+        print(
+            "Reach-time bounds (time intervals when trajectory is in target set):"
+        )
+        for i, interval in enumerate(time_intervals):
+            if isinstance(interval, (tuple, list)) and len(interval) == 2:
+                t_lower, t_upper = interval
+                print(f"  Interval {i+1}: [{t_lower:.6f}, {t_upper:.6f}]")
+            else:
+                print(f"  Interval {i+1}: {interval}")
+    else:
+        print("No reachable time intervals found.")
+
+    print("=" * 60)
+
+    # ----------------- verify reachability with simulation
+    krtb.verify_reachability(
+        n_samples=10,
+        T = 2,
+        deltaT=0.01
+    )
 
 if __name__ == "__main__":
     main()
