@@ -1,6 +1,6 @@
-import os
 import numpy as np
-import matplotlib.pyplot as plt
+from scipy import linalg
+from scipy.integrate import odeint
 
 
 from krtb import (
@@ -18,6 +18,41 @@ class KRTBInterface:
         self.n_traj = 0
         self.n_int = 0
 
+    
+    def simulate(self, dyn, pts, T_min,T_max, dt, round_up=True, forward=True):
+        if not isinstance(pts, np.ndarray):
+            pts = np.asarray(pts, dtype=float)
+        if pts.ndim == 1:
+            pts = pts.reshape(1, -1)
+        assert pts.ndim == 2  # N*n matrix, N n-dimensional points
+        T = T_max - T_min
+        assert T > 0 and T >= dt
+        T = np.ceil(T / dt) * dt if round_up else np.floor(T / dt) * dt
+        steps = np.ceil(T / dt).astype(int)
+
+        coeff = 1 if forward else -1
+
+        def ode_fx(x, t):
+            x = x.reshape(pts.shape)
+            y = dyn.ff(*x.T).squeeze(axis=0).T
+            return y.flatten() * coeff
+        
+        # avoid the numerical issue when T_min is 0
+        T_min = 1e-6 if T_min == 0 else T_min
+
+        # create the time grid for the entire simulation
+        t = np.linspace(T_min, T_max, steps + 1)
+
+        # integrate the entire trajectory in one call
+        sol = odeint(ode_fx, pts.flatten(), t)
+
+        # reshape the solution to proper format
+        trajectories = sol.reshape(
+            steps + 1, pts.shape[0], pts.shape[1]
+        )  # shape: (steps+1, N, dim)
+
+        return trajectories.transpose(1, 0, 2)
+    
     def get_sim_trajectories(self, num_traj, T, deltaT=0.01, rand_seed=None, WriteToFile=False, npzFile_path="", data_var=2):
         self.n_traj = num_traj
         self.n_int = int(T/deltaT) + 1
@@ -28,17 +63,8 @@ class KRTBInterface:
             np.random.seed(rand_seed)
 
         init_x = data_var*np.random.random([num_traj, self.system.dim]) - data_var/2
-    
-        trajectories, t = simulate_trajectories(
-            system = self.system,
-            initial_points = init_x,
-            T = T,
-            dt = deltaT
-        )
-        if WriteToFile:
-            np.savez(npzFile_path, trajectories)
 
-        return trajectories
+        return self.simulate(self.system, init_x, 0, T, deltaT)
     
     def read_sim_trajectories(self, npzFile_path):
         data_file = np.load(npzFile_path)
@@ -87,35 +113,10 @@ class KRTBInterface:
 
         # self.test(ef_initial, ef_target, eig_values)
 
-        # ef_initial, ef_target = self.normalize_eigenfunctions(ef_initial, ef_target)
-        # ef_initial, ef_target = self.normalize_eigenfunctions_by_eq(koop_model, ef_initial, ef_target, np.zeros(self.system.dim))
-
         # compute reach time bounds
         time_intervals, status = compute_reach_time_bounds(ef_initial.T, ef_target.T, eig_values)
 
         return time_intervals, status
-    
-    def normalize_eigenfunctions_by_eq(self, koop_model, ef_init, ef_targ, xe):
-        psi_eq = koop_model.psi(xe.reshape(-1,1))
-        # divide each eigenfunction by its value at equilibrium
-        for i in range(ef_init.shape[0]):
-            if psi_eq[i, 0] != 0:
-                ef_init[i, :] /= psi_eq[i, 0]
-                ef_targ[i, :] /= psi_eq[i, 0]
-        return ef_init, ef_targ
-    
-    def normalize_eigenfunctions(self, ef_init, ef_targ):
-        # Normalize so that mean |ψ| on initial set = 1 and mean phase = 0
-        for i in range(ef_init.shape[0]):
-            c = np.mean(ef_init[i, :])
-            if c == 0:
-                continue
-            phase = np.exp(-1j * np.angle(c))
-            scale = 1 / np.abs(c)
-            ef_init[i, :] *= phase * scale
-            ef_targ[i, :] *= phase * scale
-        return ef_init, ef_targ
-    
 
     def verify_reachability(self, n_samples, T=None, deltaT=0.01, rand_seed=None, writeToFile=False, readFromFile=False, npzFile_path="",):
         if (writeToFile or readFromFile) and not npzFile_path:
@@ -172,7 +173,22 @@ class KRTBInterface:
         ef_mean_err = np.nanmean(ef_errors, axis=0)
 
         return np.argsort(ef_mean_err), np.sort(ef_mean_err)
-
+    
+    @staticmethod
+    def residual(koop_model, X, Y):
+        eigVec = koop_model._regressor_eigenvectors
+        eigVal = koop_model.lamda_array
+        
+        phi_X = koop_model.observables.transform(X)
+        phi_Y = koop_model.observables.transform(Y)
+        
+        res = np.zeros(len(eigVal))
+        for i in range(len(eigVal)):
+            v = eigVec[:, i]
+            lam = eigVal[i]
+            res[i] = np.linalg.norm(phi_Y @ v - phi_X @ v * lam)/np.linalg.norm(phi_X @ v)
+        
+        return eigVal, res
 
     def test(self, ef_initial, ef_target, eig_values):
         for i, lam in enumerate(eig_values):

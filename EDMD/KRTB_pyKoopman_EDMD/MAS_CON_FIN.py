@@ -49,19 +49,26 @@ def main():
         print(f"cont eigenvalue {i} = {eig_v}")
     print("=" * 60)
 
-    # ----------------- check validity of eigenfunctions
-    efun_index_mean, mean_err = krtb.check_ef_validity(model_EDMD, sim_traj[900: , :, :], T, dt)
-    # print("Average linearity error per eigenfunction:\n", mean_err)
-    # print("=" * 60)
-    # print("Eigenfunction ranking (best to worst):\n", efun_index_mean)
-    # print("=" * 60)
-
     # ----------------- compare simulated and koopman prediction trajectories
     # unseen_sim_traj = krtb.get_sim_trajectories(num_traj = 5, T = 5, deltaT = dt, rand_seed = 11)
     # kp.plot_koopman_sim(krtb.system, model_EDMD, sim_traj=unseen_sim_traj, d1=0, d2=1)
+
+    # ----------------- check validity of eigenfunctions
+    efun_index_mean, mean_err = krtb.check_ef_validity(model_EDMD, sim_traj[900: , :, :], T, dt)
+    print("Average linearity error per eigenfunction:\n", mean_err)
+    print("=" * 60)
+    print("Eigenfunction ranking (best to worst):\n", efun_index_mean)
+    print("=" * 60)
+
+    # ----------------- residuals analysis
+    eigVal, res = krtb.residual(model_EDMD, X, Y)
+    print(np.log(eigVal)/dt)
+    print(np.argsort(res))
+    print(res)
+    # return
     
     # ----------------- time-to-reach bounds
-    time_intervals, status = krtb.time_reach_bounds(model_EDMD, valid_ef_inx=np.array([0, 2, 3, 4]))
+    time_intervals, status = krtb.time_reach_bounds(model_EDMD, valid_ef_inx=np.array([1]))
     # return
     print(f"Status: {status}")
     if len(time_intervals) > 0:
@@ -80,14 +87,14 @@ def main():
     print("=" * 60)
 
     # ----------------- verify reachability with simulation
-    validate_traj_path = os.path.join(os.path.dirname(__file__), "sim_trajectories", "MAS_CON_FIN_verify.npz")
-    krtb.verify_reachability(
-        n_samples=5,
-        T = 11,
-        deltaT=0.05,
-        readFromFile=True,
-        npzFile_path=validate_traj_path
-    )
+    # validate_traj_path = os.path.join(os.path.dirname(__file__), "sim_trajectories", "MAS_CON_FIN_verify.npz")
+    # krtb.verify_reachability(
+    #     n_samples=5,
+    #     T = 11,
+    #     deltaT=0.05,
+    #     readFromFile=True,
+    #     npzFile_path=validate_traj_path
+    # )
 
 if __name__ == "__main__":
     main()
