@@ -3,7 +3,11 @@ Time-to-Reach/
 
 EDMD/my_EDMD/
 EDMD/PyKoopman
+EDMD/KRTB_pyKoopman_EDMD/models
+EDMD/KRTB_pyKoopman_EDMD/sim_trajectories
+old/
 
+test.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

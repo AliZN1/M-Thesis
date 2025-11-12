@@ -1,10 +1,10 @@
 import numpy as np
 from scipy import linalg
 from scipy.integrate import odeint
+import math
 
 
 from krtb import (
-    simulate_trajectories,
     load_benchmark_config,
     create_system_from_config,
     sample_sets,
@@ -63,8 +63,12 @@ class KRTBInterface:
             np.random.seed(rand_seed)
 
         init_x = data_var*np.random.random([num_traj, self.system.dim]) - data_var/2
+        trajectories = self.simulate(self.system, init_x, 0, T, deltaT)
 
-        return self.simulate(self.system, init_x, 0, T, deltaT)
+        if WriteToFile:
+            np.savez(npzFile_path, trajectories)
+
+        return trajectories
     
     def read_sim_trajectories(self, npzFile_path):
         data_file = np.load(npzFile_path)
@@ -87,7 +91,7 @@ class KRTBInterface:
 
         return X, Y
 
-    def time_reach_bounds(self, koop_model, valid_ef_inx = np.array([]), n_samples_init = 10, initial_sets=None, n_samples_target = 10, target_sets=None, rand_seed = 7):
+    def time_reach_bounds(self, koop_model, valid_ef_inx = np.array([]), n_samples_init = 10, initial_sets=None, target_sets=None, n_samples_target = 10, rand_seed = 7):
         # sample initial and target sets
         if not initial_sets:
             initial_sets = self.config["initial_sets"]
@@ -118,10 +122,7 @@ class KRTBInterface:
 
         return time_intervals, status
 
-    def verify_reachability(self, n_samples, T=None, deltaT=0.01, rand_seed=None, writeToFile=False, readFromFile=False, npzFile_path="",):
-        if (writeToFile or readFromFile) and not npzFile_path:
-            raise Exception("To read or write the trajectories data from/to a file, npzFile_path argument must be provided.")
-        
+    def verify_reachability(self, n_samples, T=None, deltaT=0.01, rand_seed=None):
         if rand_seed:
             np.random.seed(rand_seed)
 
@@ -130,33 +131,26 @@ class KRTBInterface:
         bounds = target_sets[0]["bounds"]
 
         initial_samples = sample_sets(initial_sets, n_samples, rand_seed)
-
-        if not readFromFile:
-            trajectories, t = simulate_trajectories(
-                system=self.system,
-                initial_points=initial_samples,
-                T=T,
-                dt=deltaT
-            )
-            if writeToFile: np.savez(npzFile_path, trajectories=trajectories)
-        else:
-            data_file = np.load(npzFile_path)
-            trajectories = data_file[data_file.files[0]]
-
-
+        
+        trajectories = self.simulate(self.system, initial_samples, 0, T, deltaT)
+        
         def isStateInLimit(state):
             for dim, (lower, upper) in enumerate(bounds):
                 if state[dim] < lower or state[dim] > upper:
                     return False
             return True
-
+        
+        time_reach = np.full(trajectories.shape[0], np.nan)
         for traj_idx, traj in enumerate(trajectories):
             for step, state in enumerate(traj):
                 if isStateInLimit(state):
-                    print(f"Trajectory {traj_idx}: Target set reached at {step * deltaT:.2f}s")
+                    time_reach[traj_idx] = step * deltaT
                     break
-            else:
-                print(f"Trajectory {traj_idx}: Target set not reached in given simulation time.")
+            
+        if np.isnan(time_reach).any():
+            print(f"Exist a trajectory that doesn't reach the target set in the given simulation time.")
+        else:
+            print(f"All trajectories reach the target set with in time bound [{time_reach.min():.3f}, {time_reach.max():.3f}]")
 
     @staticmethod
     def check_ef_validity(koop_model, trajectories, T, dt):
@@ -175,10 +169,10 @@ class KRTBInterface:
         return np.argsort(ef_mean_err), np.sort(ef_mean_err)
     
     @staticmethod
-    def residual(koop_model, X, Y):
-        eigVec = koop_model._regressor_eigenvectors
+    def residual(koop_model, X, Y, W=None):
+        eigVec = koop_model._regressor_eigenvectors.T
         eigVal = koop_model.lamda_array
-        
+            
         phi_X = koop_model.observables.transform(X)
         phi_Y = koop_model.observables.transform(Y)
         
@@ -188,6 +182,32 @@ class KRTBInterface:
             lam = eigVal[i]
             res[i] = np.linalg.norm(phi_Y @ v - phi_X @ v * lam)/np.linalg.norm(phi_X @ v)
         
+        return eigVal, res
+    
+    @staticmethod
+    def koopman_residual(koop_model, X, Y):
+        eigVec = koop_model._regressor_eigenvectors.T
+        eigVal = koop_model.lamda_array
+
+        phi_X = koop_model.observables.transform(X)
+        phi_Y = koop_model.observables.transform(Y)
+        scale = 1/phi_X.shape[0]
+
+        Gx = scale * (phi_X.conj().T @ phi_X)
+        Gy = scale * (phi_Y.conj().T @ phi_Y)
+        Gxy = scale * (phi_X.conj().T @ phi_Y)
+        Gyx = scale * (phi_Y.conj().T @ phi_X)
+
+        res = np.zeros(len(eigVal))
+        for i in range(len(eigVal)):
+            g = eigVec[:, i]
+            lam = eigVal[i]
+            
+            M = Gy - lam * Gyx - np.conj(lam) * Gxy + np.abs(lam)**2 * Gx
+            num = np.real(np.vdot(g, M @ g))
+            den = np.real(np.vdot(g, Gx @ g))
+            res[i] = np.sqrt(max(num, 0.0)/max(den, 1e-10))
+
         return eigVal, res
 
     def test(self, ef_initial, ef_target, eig_values):

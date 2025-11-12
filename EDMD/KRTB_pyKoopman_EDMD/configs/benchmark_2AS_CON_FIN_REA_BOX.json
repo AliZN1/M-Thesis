@@ -1,0 +1,124 @@
+{
+    "benchmark": {
+        "name": "benchmark_MAS_CON_FIN_REA_BOX",
+        "description": "Multi-agent system with 16 agents - synchronization verification, BOX, REACHABLE, Finite time"
+    },
+    "system": {
+        "type": "nonlinear",
+        "dynamics": {
+            "equations": [
+                "-0.146016082604911*x1 - 0.1*(0.779918792240115*sin(x1 - x2) + 0.935902550688138*tanh(x1 - x2))/(1 + exp(-x1))", 
+                "-0.146016082604911*x2 - 0.1*(-0.438409231440893*sin(x1 - x2) - 0.526091077729072*tanh(x1 - x2))/(1 + exp(-x2))", 
+                "-0.146016082604911*x3 - 0.1*(0.538495870410434*sin(x3 - x4) + 0.64619504449252*tanh(x3 - x4))/(1 + exp(-x3))", 
+                "-0.146016082604911*x4 - 0.1*(-0.501120463659938*sin(x3 - x4) - 0.601344556391925*tanh(x3 - x4))/(1 + exp(-x4))"
+            ]
+        }
+    },
+    "initial_sets": [
+        {
+            "type": "box",
+            "bounds": [
+                [
+                    0.0485706,
+                    0.2485706
+                ],
+                [
+                    0.22484481,
+                    0.42484481
+                ],
+                [
+                    -0.39235129,
+                    -0.19235129
+                ],
+                [
+                    -0.33233091,
+                    -0.13233091
+                ]
+            ]
+        }
+    ],
+    "domain_bounds": [
+        [
+            -3.0,
+            3.0
+        ],
+        [
+            -3.0,
+            3.0
+        ],
+        [
+            -3.0,
+            3.0
+        ],
+        [
+            -3.0,
+            3.0
+        ]
+    ],
+    "verification": {
+        "target_sets": [
+            {
+                "type": "box",
+                "bounds": [
+                    [
+                        -0.1,
+                        0.1
+                    ],
+                    [
+                        -0.1,
+                        0.1
+                    ],
+                    [
+                        -0.1,
+                        0.1
+                    ],
+                    [
+                        -0.1,
+                        0.1
+                    ]
+                ]
+            }
+        ],
+        "time_horizon": [
+            0.0,
+            7
+        ],
+        "expected_result": "reachable"
+    },
+    "hj_settings": {
+        "accuracy": "low",
+        "grid_size": 21
+    },
+    "checking": {
+        "vis_dims": [
+            [
+                0,
+                1
+            ],
+            [
+                2,
+                3
+            ]
+        ],
+        "num_samples": 50,
+        "random_seed": 42,
+        "domain": [
+            [
+                -3.0,
+                3.0
+            ],
+            [
+                -3.0,
+                3.0
+            ],
+            [
+                -3.0,
+                3.0
+            ],
+            [
+                -3.0,
+                3.0
+            ]
+        ]
+    }
+}
