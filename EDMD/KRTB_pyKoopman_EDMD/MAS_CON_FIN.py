@@ -15,12 +15,14 @@ def main():
     config_path = os.path.join(os.path.dirname(__file__), "configs", "benchmark_4AS_CON_FIN_REA_BOX.json")
     report_path = os.path.join(curdir, "reports", "4AS_CON_FIN_REA_BOX.txt")
 
-    use_saved_data = False
     report = GenerateReport(report_path)
     report.append(f"Report Date & Time: {datetime.now()}\n\n")
 
+    use_saved_data = True
+    stream = report.append
+
     # ----------------- generates simulated trajectories and train pyKoopman model
-    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=report.append)
+    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=stream)
 
     if use_saved_data:
         sim_traj, t_vec = kmt.loadSimTrajectories()
@@ -39,10 +41,10 @@ def main():
     # kp.plot_koopman_sim(krtb.system, model_EDMD, sim_traj=unseen_sim_traj, d1=0, d2=1)
 
     # ----------------- analyse estimated koopman operator
-    kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=report.append)
+    kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
 
     kAnalysis.listEigVal()
-    _, valid_inx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=0.3)
+    _, valid_inx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=1)
     # res = kAnalysis.koopmanResidual(sim_traj)
 
     kAnalysis.timeReachBound(valid_ef_inx=valid_inx, n_samples=1000)

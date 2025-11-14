@@ -55,12 +55,14 @@ def main():
     config_path = os.path.join(curdir, "configs", "benchmark_NL_EIG_FIN_BACKWARD_REA_BOX.json")
     report_path = os.path.join(curdir, "reports", "NL_EIG_FIN_BACKWARD_REA_BOX.txt")
 
-    use_saved_data = True
     report = GenerateReport(report_path)
     report.append(f"Report Date & Time: {datetime.now()}\n\n")
 
+    use_saved_data = True
+    stream = report.append
+
     # ----------------- generates simulated trajectories and train pyKoopman model
-    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=report.append)
+    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=stream)
 
     if use_saved_data:
         sim_traj, t_vec = kmt.loadSimTrajectories()
@@ -83,7 +85,7 @@ def main():
     # ex5_plot_principal_eigenfun(model_EDMD, psi1_ind=25, psi2_ind=30)
 
     # ----------------- analyse estimated koopman operator
-    kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=report.append)
+    kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
 
     kAnalysis.listEigVal()
     _, valid_idx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=1)

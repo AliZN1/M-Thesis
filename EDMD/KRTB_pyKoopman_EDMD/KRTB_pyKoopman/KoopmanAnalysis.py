@@ -120,29 +120,59 @@ class KoopmanAnalysis(KRTBInterface):
 
         self.stream("="*60)
 
-    def eigfunLinearityErr(self, trajectories, t_vec, err_threshold=None):
-        n_eigs = len(self.pk_model.continuous_lamda_array)
-        n_traj = trajectories.shape[0]
+    def validity_check(self, trajectories, t_vec):
+        """Perform a validity check of eigenfunctions.
 
-        ef_errors = np.full((n_traj, n_eigs), np.nan)
+        The validity check tests the linearity of eigenfunctions phi(x(t)) == phi(x(0))
+        * exp(lambda*t).
+
+        Args:
+            trajectories: numpy.ndarray, shape (n_trajectories, n_samples, n_input_features)
+                State vectors to be checked.
+            t_vec: numpy.ndarray, shape (n_samples,)
+                Time vector.
+
+        Returns:
+            linearity_error: list
+                Linearity error for each eigenfunction.
+        """
+
+        n_traj, n_step, dim = trajectories.shape
+        assert t_vec.shape[0] == n_step
+        omega = self.pk_model.continuous_lamda_array # (n_eig, )
+
+        X = trajectories.reshape((n_traj*n_step, dim))
+        psi_flat = self.pk_model.psi(X.T) # (n_eig, n_traj*n_step)
+        psi = psi_flat.reshape((-1, n_traj, n_step)).transpose(1, 2, 0) #(n_traj, n_step, n_eig)
+
+        exp_term = np.exp(np.outer(t_vec, omega)) #(n_step, n_eig)
+        psi_t0 = psi[:, 0, :] #(n_traj, n_eig)
+        
+        diff = psi - exp_term[None, :, :] * psi_t0[:, None, :]
+
+        # computes error over all time-steps in all given trajectories for each eigenfunction
+        err = np.linalg.norm(diff,  axis=1)
+        ef_mean_err = np.mean(err, axis=0) 
+
+        return np.argsort(ef_mean_err), ef_mean_err
+
+
+    def eigfunLinearityErr(self, trajectories, t_vec, err_threshold=None):
         
         @timer
         def computErr():
-            for i, traj in enumerate(trajectories):
-                efun_index, err = self.pk_model.validity_check(t_vec, traj[:len(t_vec), :])
-                ef_errors[i, efun_index] = err
+            return self.validity_check(trajectories, t_vec)
 
-        computErr()
-        ef_mean_err = np.nanmean(ef_errors, axis=0)
+        sorted_index, ef_mean_err = computErr()
 
         valid_inx = None
         if err_threshold:
-            valid_inx = np.where(ef_mean_err < 1)[0]
+            valid_inx = np.where(ef_mean_err < err_threshold)[0]
 
         if self.stream:
             self.stream("Pykoopman Validity Check\n")
-            self.stream(f"Average linearity error per eigenfunction:\n{np.sort(ef_mean_err)}")
-            self.stream(f"\nEigenfunction ranking (best to worst):\n{np.argsort(ef_mean_err)}")
+            self.stream(f"Average linearity error per eigenfunction:\n{ef_mean_err}")
+            self.stream(f"\nEigenfunction ranking (best to worst):\n{sorted_index}")
             if err_threshold: self.stream(f"\nChosen eigenfunction indices: \n{valid_inx}")
 
             self.stream(f" Process runtime (sec): {computErr.dur:.6f}")
