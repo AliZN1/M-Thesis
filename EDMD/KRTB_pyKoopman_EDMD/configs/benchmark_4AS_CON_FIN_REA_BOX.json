@@ -1,7 +1,7 @@
 {
     "benchmark": {
         "name": "benchmark_MAS_CON_FIN_REA_BOX",
-        "description": "Multi-agent system with 16 agents - synchronization verification, BOX, REACHABLE, Finite time"
+        "description": "Multi-agent system with 8 agents - synchronization verification, BOX, REACHABLE, Finite time"
     },
     "system": {
         "type": "nonlinear",
@@ -196,5 +196,11 @@
                 3.0
             ]
         ]
+    },
+    "simulation": {
+        "num_sim_trajectories":8000,
+        "start_time": 0,
+        "final_time": 12,
+        "time_step": 0.1
     }
 }

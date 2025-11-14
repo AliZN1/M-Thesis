@@ -78,5 +78,11 @@
                 2
             ]
         ]
+    },
+    "simulation": {
+        "num_sim_trajectories": 10000,
+        "start_time": 0,
+        "final_time": 2,
+        "time_step": 0.01
     }
 }

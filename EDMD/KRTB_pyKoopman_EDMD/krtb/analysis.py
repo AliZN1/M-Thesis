@@ -190,7 +190,7 @@ def reach_time_bounds_with_magnitude_sep(ef0_vals, efF_vals, lams):
 
     bound_pos_stable = P.closed(bound_lower_pos_stable, bound_upper_pos_stable)
 
-    print(bound_pos_stable, bound_pos_unstable, ">>>>>>>")
+    # print(bound_pos_stable, bound_pos_unstable, ">>>>>>>")
 
     return bound_pos_unstable & bound_pos_stable
 

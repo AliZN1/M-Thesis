@@ -1,15 +1,14 @@
 import os
+from datetime import datetime
 import numpy as np
-import pykoopman as pk
-from pykoopman import regression
-from KRTB_pyKoopman import KRTBInterface
+from pykoopman import regression, observables
+from KRTB_pyKoopman import KoopmanModelTrainer, KoopmanAnalysis, GenerateReport
 from KRTB_pyKoopman import KoopmanPlot as kp
-from pykoopman import observables as obs
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+
 
 def ex5_plot_principal_eigenfun(model_EDMD, psi1_ind, psi2_ind):
     fig, axs = plt.subplots(1, 2, figsize=(14, 7))
@@ -52,98 +51,48 @@ def ex5_plot_principal_eigenfun(model_EDMD, psi1_ind, psi2_ind):
 
 def main():
     # -----------------  configuration
-    config_path = os.path.join(os.path.dirname(__file__), "configs", "benchmark_NL_EIG_FIN_BACKWARD_REA_BOX.json")
-    sim_traj_path = os.path.join(os.path.dirname(__file__), "sim_trajectories", "NL_EIG_FIN.npz")
+    curdir = os.path.dirname(__file__)
+    config_path = os.path.join(curdir, "configs", "benchmark_NL_EIG_FIN_BACKWARD_REA_BOX.json")
+    report_path = os.path.join(curdir, "reports", "NL_EIG_FIN_BACKWARD_REA_BOX.txt")
 
-    T, dt = 2, 0.01
+    use_saved_data = True
+    report = GenerateReport(report_path)
+    report.append(f"Report Date & Time: {datetime.now()}\n\n")
 
-    # ----------------- generates data snapshots from a nonlinear system
-    krtb = KRTBInterface(config_path)
-    # sim_traj = krtb.get_sim_trajectories(
-    #     num_traj = 10000,
-    #     T = T,
-    #     deltaT = dt,
-    #     rand_seed = 42,
-    #     WriteToFile = True,
-    #     npzFile_path = sim_traj_path
-    # )
-    sim_traj = krtb.read_sim_trajectories(sim_traj_path)
+    # ----------------- generates simulated trajectories and train pyKoopman model
+    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=report.append)
 
-    print("number of simulated trajectories: ", sim_traj.shape[0])
-    print("="*60)
-    
-    X, Y = krtb.form_data_snapshots(sim_traj[:, :, :])
-    
-    
-    # ----------------- Displays simulated trajectories
+    if use_saved_data:
+        sim_traj, t_vec = kmt.loadSimTrajectories()
+        pk_model = kmt.loadPyKoopmanModel()
+    else:
+        sim_traj, t_vec = kmt.simulateTrajectories(seed=22)
+        reg = regression.EDMD()
+        obs = observables.Polynomial(degree=7, include_bias=True)
+        pk_model = kmt.trainPyKoopmanModel(sim_traj, reg, obs)
+
+    # ----------------- plot results for comparison
+    # Displays simulated trajectories
     # kp.plot_trajectories(krtb.system, sim_traj[10001: 10010, :, :])
 
-    # ----------------- fits EDMD model
-    EDMD = regression.EDMD()
-    model_EDMD = pk.Koopman(
-        observables=obs.Polynomial(degree=7, include_bias=False),
-        regressor=EDMD
-    )
-    model_EDMD.fit(X, Y, dt=dt)
-
-    # ----------------- compare simulated and koopman prediction trajectories
+    # compare simulated and koopman prediction trajectories
     # unseen_sim_traj = krtb.get_sim_trajectories(num_traj = 10, T = 1, deltaT = dt, rand_seed = 19)
     # kp.plot_koopman_sim(krtb.system, model_EDMD, sim_traj=unseen_sim_traj)
 
-    # ----------------- plots analytical and estimated principal eigenfunctions 
+    # plots analytical and estimated principal eigenfunctions 
     # ex5_plot_principal_eigenfun(model_EDMD, psi1_ind=25, psi2_ind=30)
-    # return
 
-    # ----------------- prints eigenvalues
-    print("Continuous eigenvales: ")
-    for i, eig_v in enumerate(model_EDMD.continuous_lamda_array):
-        print(f"eig_v {i} = {eig_v:.3F}")
+    # ----------------- analyse estimated koopman operator
+    kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=report.append)
 
-    print("="*60)
+    kAnalysis.listEigVal()
+    _, valid_idx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=1)
+    # res = kAnalysis.koopmanResidual(sim_traj)
 
-    # ----------------- check validity of eigenfunctions
-    efun_index_mean, mean_err = krtb.check_ef_validity(model_EDMD, sim_traj, T, dt)
-    print("Pykoopman validity check:")
-    print("Average linearity error per eigenfunction:\n", mean_err)
-    print("Eigenfunction ranking (best to worst):\n", efun_index_mean)
-    print("=" * 60)
-    
-    # ----------------- residuals analysis
-    # eigVal, res = krtb.residual(model_EDMD, X, Y)
-    # print("Residual analysis:")
-    # print("eigenfunction ranking (best to worst):\n", np.argsort(res))
-    # print("residual errors:\n", res)
-    # print("=" * 60)
+    kAnalysis.timeReachBound(valid_ef_inx=valid_idx, n_samples=1000)
+    kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=2, deltaT=0.01)
 
-    # ----------------- time-to-reach bounds
-    valid_inx = efun_index_mean[np.where(mean_err < 1)[0]]
-    print("Chosen eigenfunction indices: \n", valid_inx)
-
-    time_intervals, status = krtb.time_reach_bounds(model_EDMD, valid_ef_inx=valid_inx, n_samples_init=1000, n_samples_target=1000)
-    
-    print(f"Status: {status}")
-    if len(time_intervals) > 0:
-        print(
-            "Reach-time bounds (time intervals when trajectory is in target set):"
-        )
-        for i, interval in enumerate(time_intervals):
-            if isinstance(interval, (tuple, list)) and len(interval) == 2:
-                t_lower, t_upper = interval
-                print(f"  Interval {i+1}: [{t_lower:.6f}, {t_upper:.6f}]")
-            else:
-                print(f"  Interval {i+1}: {interval}")
-    else:
-        print("No reachable time intervals found.")
-
-    print("=" * 60)
-
-    # ----------------- verify reachability with simulation
-    print("Result of reachability with simulation: ")
-    krtb.verify_reachability(
-        n_samples=10,
-        T = T,
-        deltaT=dt
-    )
+    report.export()
 
 if __name__ == "__main__":
     main()
