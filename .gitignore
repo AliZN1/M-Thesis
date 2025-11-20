@@ -3,10 +3,12 @@ Time-to-Reach/
 
 EDMD/my_EDMD/
 EDMD/PyKoopman
-EDMD/KRTB_pyKoopman_EDMD/models
-EDMD/KRTB_pyKoopman_EDMD/sim_trajectories
-EDMD/KRTB_pyKoopman_EDMD/reports
 old/
+
+model/
+models/
+sim_trajectories/
+reports/
 
 test.py
 .vscode/
