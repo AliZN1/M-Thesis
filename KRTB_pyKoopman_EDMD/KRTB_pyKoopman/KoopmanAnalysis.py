@@ -148,7 +148,9 @@ class KoopmanAnalysis(KRTBInterface):
         exp_term = np.exp(np.outer(t_vec, omega)) #(n_step, n_eig)
         psi_t0 = psi[:, 0, :] #(n_traj, n_eig)
         
-        diff = psi - exp_term[None, :, :] * psi_t0[:, None, :]
+        epsilon = 10e-10
+
+        diff = (psi - exp_term[None, :, :] * psi_t0[:, None, :]) / (psi + epsilon)
 
         # computes error over all time-steps in all given trajectories for each eigenfunction
         err = np.linalg.norm(diff,  axis=1)
@@ -196,14 +198,14 @@ class KoopmanAnalysis(KRTBInterface):
             res[i] = np.linalg.norm(phi_Y @ v - phi_X @ v * lam)/np.linalg.norm(phi_X @ v)
     
         if self.stream:
-            self.stream("Resutl of Residual Analysis for Associated Eigenfunctions:")
+            self.stream("Result of Residual Analysis for Associated Eigenfunctions:")
             self.stream(f"Eigenfunction ranking (best to worst):\n{np.argsort(res)}")
             self.stream(f"Residual errors:\n{res}")
             self.stream("=" * 60)
 
         return res
 
-    def koopmanResidual_complite(self, sim_traj):
+    def koopmanResidual2(self, sim_traj):
         X, Y = formDataSnapshots(sim_traj)
 
         eigVec = self.pk_model._regressor_eigenvectors.T
@@ -229,7 +231,7 @@ class KoopmanAnalysis(KRTBInterface):
             res[i] = np.sqrt(max(num, 0.0)/max(den, 1e-10))
 
         if self.stream:
-            self.stream("Resutl of Residual Analysis for Associated Eigenfunctions:")
+            self.stream("Result of Residual Analysis for Associated Eigenfunctions:")
             self.stream(f"Eigenfunction ranking (best to worst):\n{np.argsort(res)}")
             self.stream(f"Residual errors:\n{res}")
             self.stream("=" * 60)

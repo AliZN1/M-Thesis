@@ -22,6 +22,11 @@ def create_system_from_config(system_config):
         equations = system_config["dynamics"]["equations"]
         return NonlinearSystem(equations)
 
+    elif system_type == "nonlinear_controlled":
+        equations = system_config["dynamics"]["equations"]
+        n_inputs = system_config["num_inputs"]
+        return ControlledNonlinearSystem(equations, n_inputs)
+
     else:
         raise ValueError(f"Unknown system type: {system_type}")
 
@@ -94,3 +99,44 @@ class NonlinearSystem:
                 result = result.T  # Make it (dim, num_points)
 
         return np.array(result).reshape(-1, 1) if result.ndim == 1 else result
+
+
+class ControlledNonlinearSystem:
+    """Controlled Nonlinear system wrapper for KRTB compatibility."""
+
+    def __init__(self, equations, n_inputs):
+        self.equations = equations
+        self.num_x = len(equations)
+        self.num_u = n_inputs
+        self.dim = self.num_x
+
+        # Create symbolic variables
+        self.x = symbols([f"x{i+1}" for i in range(self.num_x)])
+        self.u = symbols([f"u{i+1}" for i in range(self.num_u)])
+        
+        # Create symbolic dynamics
+        self.f = Matrix([sp.sympify(eq) for eq in equations])
+
+        # pre-lambdify
+        self.f_lamb = lambdify([*self.x, *self.u], self.f, "numpy")
+
+    def ff(self, x, u):
+        """Evaluates f(x,u) based on system equations and input(s)"""
+
+        x = np.asarray(x)
+        u = np.asarray(u)
+
+        # case1: single sample
+        if x.ndim == 1:
+            return np.array(self.f_lamb(x, u)).reshape(-1, 1)
+
+        #case2: batch samples
+        if x.shape[0] == self.num_x:
+            x = x.T
+        if u.shape[0] == self.num_u:
+            u = u.T
+
+        xs = [x[:, i] for i in range(self.num_x)]    # list of arrays
+        us = [u[:, i] for i in range(self.num_u)]
+
+        return np.array(self.f_lamb(*xs, *us)).squeeze(axis=1) #(num_features, num_samples)

@@ -10,6 +10,12 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
+def estimate_scaling_factor(a, b):
+    a_flat = a.flatten()
+    b_flat = b.flatten()
+
+    return  np.dot(a_flat, b_flat) / np.dot(b_flat, b_flat)
+
 def ex5_plot_principal_eigenfun(model_EDMD, psi1_ind, psi2_ind):
     fig, axs = plt.subplots(1, 2, figsize=(14, 7))
 
@@ -31,15 +37,22 @@ def ex5_plot_principal_eigenfun(model_EDMD, psi1_ind, psi2_ind):
     psi1_edmd = Psi[psi1_ind, :].reshape(X_1.shape)
     psi2_edmd = Psi[psi2_ind, :].reshape(X_1.shape)  # check sign convention
 
+    # estimate scaling factor
+    c1 = estimate_scaling_factor(psi1_t, psi1_edmd)
+    c2 = estimate_scaling_factor(psi2_t, psi2_edmd)
+    
+    psi1_edmd *= c1
+    psi2_edmd *= c2
+
     # Compute errors
     eps = 1e-8
     err1 = np.abs((psi1_t - psi1_edmd) / (psi1_t + eps))
     err2 = np.abs((psi2_t - psi2_edmd) / (psi2_t + eps))
     err = np.maximum(err1, err2)
 
-    sc = axs[1].scatter(psi1_edmd, psi2_edmd, cmap='plasma', c=err, norm=mcolors.LogNorm(vmin=1e-2, vmax=1e3) , s=4)
+    sc = axs[1].scatter(psi1_edmd, psi2_edmd, cmap='plasma', c=err, norm=mcolors.LogNorm(vmin=1e-2, vmax=1e1) , s=4)
     cbar = fig.colorbar(sc, ax=axs[1], shrink=0.5)
-    cbar.set_label('Error')
+    cbar.set_label('error bar')
 
     axs[1].set_xlabel('ψ₁_edmd')
     axs[1].set_ylabel('ψ₂_edmd')
@@ -62,7 +75,7 @@ def main():
     stream = report.append
 
     # ----------------- generates simulated trajectories and train pyKoopman model
-    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=stream)
+    kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=False, save_model=False, stream=stream)
 
     if use_saved_data:
         sim_traj, t_vec = kmt.loadSimTrajectories()
@@ -75,20 +88,22 @@ def main():
 
     # ----------------- plot results for comparison
     # Displays simulated trajectories
-    # kp.plot_trajectories(krtb.system, sim_traj[10001: 10010, :, :])
+    # rand_num = np.random.randint(0, 10000, 20)
+    # kp.plot_trajectories(kmt.system, sim_traj[rand_num, :, :], x_lim=[-1, 3], y_lim=[-2,2])
 
     # compare simulated and koopman prediction trajectories
-    # unseen_sim_traj = krtb.get_sim_trajectories(num_traj = 10, T = 1, deltaT = dt, rand_seed = 19)
-    # kp.plot_koopman_sim(krtb.system, model_EDMD, sim_traj=unseen_sim_traj)
+    # unseen_sim_traj, _ = kmt.simulateTrajectoriesCustom(num_traj=5, T=1, dt=0.01, seed=11)
+    # kp.compareKoopmanPrediction(kmt.system, pk_model, sim_traj=unseen_sim_traj, x_lim=[-3, 5], y_lim=[-3, 3])
 
-    # plots analytical and estimated principal eigenfunctions 
-    # ex5_plot_principal_eigenfun(model_EDMD, psi1_ind=25, psi2_ind=30)
+    # plots analytical and estimated principal eigenfunctions
+    # ex5_plot_principal_eigenfun(pk_model, psi1_ind=33, psi2_ind=22)
+    # return
 
     # ----------------- analyse estimated koopman operator
     kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
 
     kAnalysis.listEigVal()
-    _, valid_idx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=1)
+    _, valid_idx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=0.1)
     # res = kAnalysis.koopmanResidual(sim_traj)
 
     kAnalysis.timeReachBound(valid_ef_inx=valid_idx, n_samples=1000)

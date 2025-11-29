@@ -43,18 +43,18 @@ def plot_trajectories(system, trajectories, d1=None, d2=None, x_lim=[-2, 2], y_l
         ax.set_xlabel("x1")
         ax.set_ylabel("x2")
 
-    ax.set_title(f"Trajectory projection")
+    ax.set_title(f"Simulated Trajectories")
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 
     plt.tight_layout()
     plt.show()
 
-def plot_koopman_sim(system, koop_model, sim_traj, d1=None, d2=None, x_lim=[-2, 2], y_lim=[-2, 2]):
+def compareKoopmanPrediction(system, koop_model, sim_traj, d1=None, d2=None, x_lim=[-2, 2], y_lim=[-2, 2]):
     if system.dim == 2:
         d1, d2 = 0, 1
 
-    fig, ax = get_phase_portrait(system, d1=d1, d2=d2, x_lim=[-2, 2], y_lim=[-2, 2])
+    fig, ax = get_phase_portrait(system, d1=d1, d2=d2, x_lim=x_lim, y_lim=y_lim)
     
     for traj in sim_traj:
         koop_traj = koop_model.simulate(traj[0, :], n_steps=traj.shape[0])
@@ -70,7 +70,11 @@ def plot_koopman_sim(system, koop_model, sim_traj, d1=None, d2=None, x_lim=[-2, 
         ax.set_xlabel("x1")
         ax.set_ylabel("x2")
 
+    red_proxy = plt.Line2D([0], [0], color='r', marker='o', label='Simulated')
+    green_proxy = plt.Line2D([0], [0], color='g', marker='o', label='Koopman Prediction')
+
     ax.set_title(f"Trajectory projection")
+    ax.legend(handles=[red_proxy, green_proxy], loc='upper right')
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
 

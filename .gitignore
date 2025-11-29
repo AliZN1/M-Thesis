@@ -5,10 +5,9 @@ EDMD/my_EDMD/
 EDMD/PyKoopman
 old/
 
-model/
-models/
 sim_trajectories/
 reports/
+models/
 
 test.py
 .vscode/
