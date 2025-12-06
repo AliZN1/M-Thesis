@@ -34,21 +34,39 @@ def main():
         pk_model = kmt.trainPyKoopmanModel(sim_traj, reg, obs)
     
     # ----------------- plot results for comparison
-    # kp.plot_trajectories(krtb.system , sim_traj[101: 102], d1=0, d2=1, x_lim=[-3, 3], y_lim=[-3, 3])
+    kp.plot_trajectories(kmt.system , sim_traj[100: 110], d1=6, d2=7, x_lim=[-3, 3], y_lim=[-3, 3])
+    return
 
     # compare simulated and koopman prediction trajectories
-    # unseen_sim_traj = krtb.get_sim_trajectories(num_traj = 5, T = 5, deltaT = dt, rand_seed = 16)
-    # kp.plot_koopman_sim(krtb.system, model_EDMD, sim_traj=unseen_sim_traj, d1=0, d2=1)
+    # unseen_sim_traj, _ = kmt.simulateTrajectoriesCustom(num_traj=5, T=10, dt=0.1, seed=13)
+    # kp.compareKoopmanPrediction(kmt.system, pk_model, sim_traj=unseen_sim_traj, d1=0, d2=1)
+
+    # ----------------- analyse the reachability of sets with simulation
+    initial_sets = np.array([
+            [2.27569841, 2.47569841], [-1.22870703, -1.02870703],
+            [-1.75449468, -1.55449468], [1.78350465, 1.98350465],
+            [1.94591232, 2.14591232], [1.62672579, 1.82672579],
+            [-1.77641671, -1.57641671], [-2.42235598,-2.22235598]
+        ])
+    target_sets = np.array([
+            [-0.1, 0.1],[-0.1, 0.1],
+            [-0.1, 0.1], [-0.1, 0.1],
+            [-0.1, 0.1], [-0.1, 0.1],
+            [-0.1, 0.1], [-0.1, 0.1]
+        ])
+    # kp.reachabilityWithSimulationMultiD(kmt.system, initial_sets, target_sets, 
+    #                               T=7, dt=0.01, x_lim=[-3, 3], y_lim=[-3, 3])
 
     # ----------------- analyse estimated koopman operator
     kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
 
     kAnalysis.listEigVal()
-    _, valid_inx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=1)
+    # _, valid_inx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=8)
     # res = kAnalysis.koopmanResidual(sim_traj)
 
-    kAnalysis.timeReachBound(valid_ef_inx=valid_inx, n_samples=1000)
-    kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=13, deltaT=0.1)
+    valid_inx = np.array([0, 13, 14, 19, 18, 25, 26, 80, 81, 87, 88, 85, 86])
+    kAnalysis.timeReachBound(valid_ef_inx=valid_inx, n_samples=1000, rand_seed=11)
+    kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=7, deltaT=0.01, plot=True)
 
     report.export()
 

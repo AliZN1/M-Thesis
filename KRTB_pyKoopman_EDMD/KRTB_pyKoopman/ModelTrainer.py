@@ -92,6 +92,14 @@ def formDataSnapshots(sim_traj, controls=None):
 
     return X, Y
 
+def sample_set(set, n_sample):
+    x_init = np.zeros((n_sample, len(set)))
+    
+    for i, bounds in enumerate(set):
+        x_init[:, i] = np.random.uniform(*bounds, size=n_sample)
+
+    return x_init
+
 def genControlCmd(n_sample, t_vec, v_scale=None):
     # gama_lim = (-np.pi/6, np.pi/6)
     # v_amp = np.random.uniform(*v_scale, size=n_sample)
@@ -133,12 +141,7 @@ class KoopmanModelTrainer:
 
         
         # Simulate trajectories based on configuration stored in config file
-        x_init = np.zeros((num_traj, self.system.dim))
-        bounds_str = ""
-        for i, bounds in enumerate(self.config["domain_bounds"]):
-            x_init[:, i] = np.random.uniform(*bounds, size=num_traj)
-            bounds_str += f"  x{i+1}: {bounds}\n"
-
+        x_init = sample_set(self.config["domain_bounds"], num_traj)
         print("Simulating trajectories ...")
         sim_traj, t = simulate(
             dyn = self.system, 
@@ -155,6 +158,10 @@ class KoopmanModelTrainer:
             np.savez(self._sim_data_path, sim_traj, t)
 
         if self.stream:
+            bounds_str = ""
+            for i, bounds in enumerate(self.config["domain_bounds"]):
+                bounds_str += f"  x{i+1}: {bounds}\n"
+
             self.stream(f"Generating Simulated Trajectory to Train a Koopman Model")
             self.stream(f" Num. simulated trajectories: {num_traj}\n Random seed: {seed}\n State bounds: \n{bounds_str}")
             self.stream(f" Simulation time span (sec): {(T_end - T_0):.3f} [{T_0:.3f}, {T_end:.3f}] \n Time step(sec): {dt} \n Process runtime (sec): {simulate.dur:.3f}")

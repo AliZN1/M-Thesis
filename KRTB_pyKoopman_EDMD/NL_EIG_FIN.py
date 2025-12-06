@@ -5,6 +5,7 @@ from pykoopman import regression, observables
 from KRTB_pyKoopman import KoopmanModelTrainer, KoopmanAnalysis, GenerateReport
 from KRTB_pyKoopman import KoopmanPlot as kp
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import matplotlib.colors as mcolors
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -99,15 +100,36 @@ def main():
     # ex5_plot_principal_eigenfun(pk_model, psi1_ind=33, psi2_ind=22)
     # return
 
+    # ----------------- analyse the reachability of sets with simulation
+    initial_sets = np.array([
+            [[0.0,   0.10], [1.10,   1.20]], # Reachable
+            [[0.32,  0.42], [-1.15, -1.25]], # Reachable
+            [[0.80,  0.90], [-1.70, -1.60]], # Reachable
+            [[-1.0, -0.90], [1.74,   1.84]]  # Unreachable
+        ])
+    target_sets = np.array([
+            [[1.80,   1.90], [-0.80, -0.70]], # Reachable
+            [[-2.0,  -1.90], [-1.40, -1.30]], # Reachable
+            [[2.87,   2.97], [-1.88, -1.78]], # Reachable
+            [[-1.82, -1.72], [0.0,    0.10]]  # Unreachable
+        ])
+    # kp.reachabilityWithSimulation(kmt.system, initial_sets, target_sets, 
+    #                               T=2, dt=0.01, x_lim=[-2.1, 3], y_lim=[-2.1, 3])
+
     # ----------------- analyse estimated koopman operator
     kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
+
+    #----- remove from here
+    kAnalysis.BF_consistency_test(sim_traj)
+    return
+    #----- to here
 
     kAnalysis.listEigVal()
     _, valid_idx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=0.1)
     # res = kAnalysis.koopmanResidual(sim_traj)
 
-    kAnalysis.timeReachBound(valid_ef_inx=valid_idx, n_samples=1000)
-    kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=2, deltaT=0.01)
+    kAnalysis.timeReachBound(valid_ef_inx=np.array([21, 33, 22]), n_samples=1000)
+    kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=2, deltaT=0.01, plot=False)
 
     report.export()
 

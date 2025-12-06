@@ -7,6 +7,7 @@ from krtb import (
      create_system_from_config
 )
 from .ModelTrainer import simulate, formDataSnapshots, timer
+from .KoopmanPlot import reachabilityWithSimulation, reachabilityWithSimulationMultiD,isStateInLimit
 
 
 class KRTBInterface:
@@ -70,7 +71,7 @@ class KRTBInterface:
 
         return time_intervals, status
 
-    def verifyReachabilityWithSim(self, n_samples, final_time, start_time=0, deltaT=0.01, seed=None):
+    def verifyReachabilityWithSim(self, n_samples, final_time, start_time=0, deltaT=0.01, seed=None, plot=False):
         initial_sets = self.config["initial_sets"]
         target_sets = self.config["verification"]["target_sets"]
         bounds = target_sets[0]["bounds"]
@@ -80,16 +81,10 @@ class KRTBInterface:
         
         trajectories, _ = simulate(self.system, initial_samples, start_time, final_time, deltaT)
         
-        def isStateInLimit(state):
-            for dim, (lower, upper) in enumerate(bounds):
-                if state[dim] < lower or state[dim] > upper:
-                    return False
-            return True
-        
         time_reach = np.full(trajectories.shape[0], np.nan)
         for traj_idx, traj in enumerate(trajectories):
             for step, state in enumerate(traj):
-                if isStateInLimit(state):
+                if isStateInLimit(state, bounds):
                     time_reach[traj_idx] = step * deltaT
                     break
         t_end = time.time()
@@ -104,6 +99,14 @@ class KRTBInterface:
             self.stream(f" Process runtime (sec): {t_end-t_0:.6f}")
             self.stream("="*60)
 
+        if plot:
+            init_set = np.asarray(initial_sets[0]["bounds"])
+            tar_set = np.asarray(target_sets[0]["bounds"])
+            if self.system.dim > 2:
+                reachabilityWithSimulationMultiD(self.system, init_set, tar_set, final_time, deltaT)
+            else:
+                reachabilityWithSimulation(self.system, init_set, tar_set, final_time, deltaT)
+    
 
 class KoopmanAnalysis(KRTBInterface):
     def __init__(self, config_path, pk_model, stream=None):
@@ -148,7 +151,7 @@ class KoopmanAnalysis(KRTBInterface):
         exp_term = np.exp(np.outer(t_vec, omega)) #(n_step, n_eig)
         psi_t0 = psi[:, 0, :] #(n_traj, n_eig)
         
-        epsilon = 10e-10
+        epsilon = 1e-10
 
         diff = (psi - exp_term[None, :, :] * psi_t0[:, None, :]) / (psi + epsilon)
 
@@ -168,7 +171,7 @@ class KoopmanAnalysis(KRTBInterface):
         sorted_index, ef_mean_err = computErr()
 
         valid_inx = None
-        if err_threshold:
+        if err_threshold is not None:
             valid_inx = np.where(ef_mean_err < err_threshold)[0]
 
         if self.stream:
@@ -181,7 +184,7 @@ class KoopmanAnalysis(KRTBInterface):
             self.stream("=" * 60)
 
         return ef_mean_err, valid_inx
-
+    
     def koopmanResidual(self, sim_traj):
         X, Y = formDataSnapshots(sim_traj)
 
