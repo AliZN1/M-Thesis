@@ -73,7 +73,8 @@ def main():
     report.append(f"Report Date & Time: {datetime.now()}\n\n")
 
     use_saved_data = True
-    stream = report.append
+    # stream = report.append
+    stream = print
 
     # ----------------- generates simulated trajectories and train pyKoopman model
     kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=False, save_model=False, stream=stream)
@@ -98,7 +99,6 @@ def main():
 
     # plots analytical and estimated principal eigenfunctions
     # ex5_plot_principal_eigenfun(pk_model, psi1_ind=33, psi2_ind=22)
-    # return
 
     # ----------------- analyse the reachability of sets with simulation
     initial_sets = np.array([
@@ -119,16 +119,11 @@ def main():
     # ----------------- analyse estimated koopman operator
     kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
 
-    #----- remove from here
-    kAnalysis.BF_consistency_test(sim_traj)
-    return
-    #----- to here
-
     kAnalysis.listEigVal()
-    _, valid_idx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=0.1)
+    _, valid_idx = kAnalysis.eigFunValidity(sim_traj, t_vec, alpha=0.1, score_threshold=0.012)
     # res = kAnalysis.koopmanResidual(sim_traj)
 
-    kAnalysis.timeReachBound(valid_ef_inx=np.array([21, 33, 22]), n_samples=1000)
+    kAnalysis.timeReachBound(valid_ef_idx=valid_idx, n_samples=1000)
     kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=2, deltaT=0.01, plot=False)
 
     report.export()

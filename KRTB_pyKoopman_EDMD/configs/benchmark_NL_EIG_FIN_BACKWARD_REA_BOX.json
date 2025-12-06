@@ -15,7 +15,7 @@
     "initial_sets": [
         {
             "type": "box",
-            "bounds":[[-1.0, -0.90], [1.74,   1.84]]
+            "bounds":[[0.80,  0.90], [-1.70, -1.60]]
         }
     ],
     "domain_bounds": [
@@ -32,7 +32,7 @@
         "target_sets": [
             {
                 "type": "box",
-                "bounds": [[-1.82, -1.72], [0.0,    0.10]]
+                "bounds": [[2.87,   2.97], [-1.88, -1.78]]
             }
         ],
         "time_horizon": [

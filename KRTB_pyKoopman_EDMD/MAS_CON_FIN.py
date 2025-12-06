@@ -20,7 +20,6 @@ def main():
 
     use_saved_data = True
     stream = report.append
-
     # ----------------- generates simulated trajectories and train pyKoopman model
     kmt = KoopmanModelTrainer(config_path, curdir, save_sim_data=True, save_model=True, stream=stream)
 
@@ -30,23 +29,28 @@ def main():
     else:
         sim_traj, t_vec = kmt.simulateTrajectories(seed=22)
         reg = regression.EDMD()
-        obs = observables.Polynomial(degree=3, include_bias=True)
+        obs = observables.Polynomial(degree=4, include_bias=True)
         pk_model = kmt.trainPyKoopmanModel(sim_traj, reg, obs)
     
     # ----------------- plot results for comparison
-    kp.plot_trajectories(kmt.system , sim_traj[100: 110], d1=6, d2=7, x_lim=[-3, 3], y_lim=[-3, 3])
-    return
+    # kp.plot_trajectories(kmt.system , sim_traj[100: 110], d1=6, d2=7, x_lim=[-3, 3], y_lim=[-3, 3])
 
     # compare simulated and koopman prediction trajectories
     # unseen_sim_traj, _ = kmt.simulateTrajectoriesCustom(num_traj=5, T=10, dt=0.1, seed=13)
     # kp.compareKoopmanPrediction(kmt.system, pk_model, sim_traj=unseen_sim_traj, d1=0, d2=1)
 
     # ----------------- analyse the reachability of sets with simulation
+    # initial_sets = np.array([
+            # [2.27569841, 2.47569841], [-1.22870703, -1.02870703],
+            # [-1.75449468, -1.55449468], [1.78350465, 1.98350465],
+            # [1.94591232, 2.14591232], [1.62672579, 1.82672579],
+            # [-1.77641671, -1.57641671], [-2.42235598,-2.22235598]
+    #     ])
     initial_sets = np.array([
-            [2.27569841, 2.47569841], [-1.22870703, -1.02870703],
-            [-1.75449468, -1.55449468], [1.78350465, 1.98350465],
-            [1.94591232, 2.14591232], [1.62672579, 1.82672579],
-            [-1.77641671, -1.57641671], [-2.42235598,-2.22235598]
+            [-1.80, -1.60], [-0.78, -0.58],
+            [1.27, 1.47], [0.52, 0.72],
+            [-0.54, -0.34], [1.27, 1.47],
+            [1.52, 1.72], [-2.01,-1.81]
         ])
     target_sets = np.array([
             [-0.1, 0.1],[-0.1, 0.1],
@@ -56,16 +60,15 @@ def main():
         ])
     # kp.reachabilityWithSimulationMultiD(kmt.system, initial_sets, target_sets, 
     #                               T=7, dt=0.01, x_lim=[-3, 3], y_lim=[-3, 3])
-
+    # return
+    
     # ----------------- analyse estimated koopman operator
     kAnalysis = KoopmanAnalysis(config_path, pk_model, stream=stream)
 
     kAnalysis.listEigVal()
-    # _, valid_inx = kAnalysis.eigfunLinearityErr(sim_traj, t_vec, err_threshold=8)
-    # res = kAnalysis.koopmanResidual(sim_traj)
+    _, valid_idx = kAnalysis.eigFunValidity(sim_traj, t_vec, alpha=0.1, score_threshold=1.1)
 
-    valid_inx = np.array([0, 13, 14, 19, 18, 25, 26, 80, 81, 87, 88, 85, 86])
-    kAnalysis.timeReachBound(valid_ef_inx=valid_inx, n_samples=1000, rand_seed=11)
+    kAnalysis.timeReachBound(valid_ef_idx=valid_idx, n_samples=1000, rand_seed=11)
     kAnalysis.verifyReachabilityWithSim(n_samples=100, final_time=7, deltaT=0.01, plot=True)
 
     report.export()

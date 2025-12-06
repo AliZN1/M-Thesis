@@ -18,7 +18,7 @@ class KRTBInterface:
 
         self.stream = stream
 
-    def timeReachBound(self, valid_ef_inx = np.array([]), n_samples=100, initial_sets=None, target_sets=None, rand_seed=None):
+    def timeReachBound(self, valid_ef_idx = np.array([]), n_samples=100, initial_sets=None, target_sets=None, rand_seed=None):
         # sample initial and target sets
         if not initial_sets:
             initial_sets = self.config["initial_sets"]
@@ -37,10 +37,10 @@ class KRTBInterface:
         
         eig_values = self.pk_model.continuous_lamda_array
 
-        if len(valid_ef_inx) != 0:
-            ef_initial = ef_initial[valid_ef_inx, :]
-            ef_target = ef_target[valid_ef_inx, :]
-            eig_values = eig_values[valid_ef_inx]
+        if len(valid_ef_idx) != 0:
+            ef_initial = ef_initial[valid_ef_idx, :]
+            ef_target = ef_target[valid_ef_idx, :]
+            eig_values = eig_values[valid_ef_idx]
 
         # compute reach time bounds
         @timer
@@ -123,7 +123,7 @@ class KoopmanAnalysis(KRTBInterface):
 
         self.stream("="*60)
 
-    def validity_check(self, trajectories, t_vec):
+    def eigFunLinearityErr(self, trajectories, t_vec):
         """Perform a validity check of eigenfunctions.
 
         The validity check tests the linearity of eigenfunctions phi(x(t)) == phi(x(0))
@@ -161,30 +161,50 @@ class KoopmanAnalysis(KRTBInterface):
 
         return np.argsort(ef_mean_err), ef_mean_err
 
+    def BFconsistencyTest(self, sim_traj):
+        X, Y = formDataSnapshots(sim_traj)
+        phi_X = self.pk_model.observables.transform(X)
+        Phi_Y = self.pk_model.observables.transform(Y)
 
-    def eigfunLinearityErr(self, trajectories, t_vec, err_threshold=None):
+        Kf = np.linalg.pinv(phi_X) @ Phi_Y
+        Kb = np.linalg.pinv(Phi_Y) @ phi_X
+        n_eigFun = Kf.shape[0]
+
+        Mc = np.identity(n_eigFun) - Kf @ Kb
+        _, eigVec = np.linalg.eig(Kf)
+
+        eigVec = eigVec / np.linalg.norm(eigVec, axis=0, keepdims=True)
+        err_fb = np.linalg.norm(Mc @ eigVec, axis=0)
+        
+        return err_fb
+
+    def eigFunValidity(self, sim_traj, t_vec, alpha, score_threshold=None):
         
         @timer
-        def computErr():
-            return self.validity_check(trajectories, t_vec)
+        def computeScore():
+            _, linearity_err = self.eigFunLinearityErr(sim_traj, t_vec)
+            invariant_err = self.BFconsistencyTest(sim_traj)
+            invariant_err = invariant_err / np.max(invariant_err)
 
-        sorted_index, ef_mean_err = computErr()
+            return alpha * linearity_err + (1 - alpha) * invariant_err
+
+        score = computeScore()
 
         valid_inx = None
-        if err_threshold is not None:
-            valid_inx = np.where(ef_mean_err < err_threshold)[0]
+        if score_threshold is not None:
+            valid_inx = np.where(score < score_threshold)[0]
 
         if self.stream:
             self.stream("Pykoopman Validity Check\n")
-            self.stream(f"Average linearity error per eigenfunction:\n{ef_mean_err}")
-            self.stream(f"\nEigenfunction ranking (best to worst):\n{sorted_index}")
-            if err_threshold: self.stream(f"\nChosen eigenfunction indices: \n{valid_inx}")
+            self.stream(f"Eigenfunction scores based on linearity and invariant error:\n{score}")
+            self.stream(f"\nEigenfunction ranking (best to worst):\n{np.argsort(score)}")
+            if score_threshold: self.stream(f"\nChosen eigenfunction indices: \n{valid_inx}")
 
-            self.stream(f" Process runtime (sec): {computErr.dur:.6f}")
+            self.stream(f" Process runtime (sec): {computeScore.dur:.6f}")
             self.stream("=" * 60)
 
-        return ef_mean_err, valid_inx
-    
+        return score, valid_inx
+
     def koopmanResidual(self, sim_traj):
         X, Y = formDataSnapshots(sim_traj)
 
