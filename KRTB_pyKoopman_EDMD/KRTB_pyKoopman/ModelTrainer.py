@@ -100,19 +100,19 @@ def sample_set(set, n_sample):
 
     return x_init
 
-def genControlCmd(n_sample, t_vec, v_scale=None):
-    # gama_lim = (-np.pi/6, np.pi/6)
-    # v_amp = np.random.uniform(*v_scale, size=n_sample)
-    # v_freq = 0.5*np.pi * np.random.rand(n_sample)
-    # gama_amp = np.random.uniform(*gama_lim, size=n_sample)
-    # gama_freq = 2*np.pi * np.random.rand(n_sample)
-    # gama = gama_amp[:, np.newaxis] * np.sin(np.outer(gama_freq, t_vec))
+# def genControlCmd(n_sample, t_vec, v_scale=None):
+#     # gama_lim = (-np.pi/6, np.pi/6)
+#     # v_amp = np.random.uniform(*v_scale, size=n_sample)
+#     # v_freq = 0.5*np.pi * np.random.rand(n_sample)
+#     # gama_amp = np.random.uniform(*gama_lim, size=n_sample)
+#     # gama_freq = 2*np.pi * np.random.rand(n_sample)
+#     # gama = gama_amp[:, np.newaxis] * np.sin(np.outer(gama_freq, t_vec))
 
-    v = np.random.uniform(0.5, 1.2, size=(n_sample, 1)) * np.ones((n_sample, t_vec.shape[0]))
-    gama = np.random.uniform(0.1, 0.3, size=(n_sample, 1)) * np.ones((n_sample, t_vec.shape[0]))
-    controls = np.stack((v, gama), axis=-1)
+#     v = np.random.uniform(0.05, 0.5, size=(n_sample, 1)) * np.ones((n_sample, t_vec.shape[0]))
+#     gama = np.random.uniform(0.1, 0.3, size=(n_sample, 1)) * np.ones((n_sample, t_vec.shape[0]))
+#     controls = np.stack((v, gama), axis=-1)
 
-    return controls
+#     return controls
 
 
 class KoopmanModelTrainer:
@@ -170,7 +170,7 @@ class KoopmanModelTrainer:
         
         return sim_traj, t
     
-    def simTrajWithControl(self, seed=None, num_traj=None, T_0=None, T_end=None, dt=None):
+    def simTrajOpenLoop(self, genControlCmd, seed=None, num_traj=None, T_0=None, T_end=None, dt=None):
         if seed:
             np.random.seed(seed)
         if num_traj is not None and T_0 is not None and T_end is not None and dt is not None:
@@ -214,6 +214,54 @@ class KoopmanModelTrainer:
             # save the simulated trajectories inside a file
             mkdir(self._sim_data_path)
             np.savez(self._sim_data_path, sim_traj, t_vec, controls)
+
+        if self.stream:
+            self.stream(f"Generating Simulated Trajectory to Train a Koopman Model")
+            self.stream(f" Num. simulated trajectories: {num_traj}\n Random seed: {seed}\n State bounds: \n{bounds_str}")
+            self.stream(f" Simulation time span (sec): {(T_end - T_0):.3f} [{T_0:.3f}, {T_end:.3f}] \n Time step(sec): {dt} \n Process runtime (sec): {sim.dur:.3f}")
+            if self._save_sim_data: self.stream(f" Simulated trajectories are stored at: {self._sim_data_path}")
+            self.stream("="*60)
+        
+        return sim_traj, controls, t_vec
+    
+    def simTrajClosedLoop(self, controller, seed=None, num_traj=None, T_0=None, T_end=None, dt=None, **kwargs):
+        if seed:
+            np.random.seed(seed)
+        
+        sim_config = self.config["simulation"]
+        T_0 = T_0 if T_0 is not None else sim_config["start_time"]
+        T_end = T_end if T_end is not None else sim_config["final_time"]
+        dt = dt if dt is not None else sim_config["time_step"]
+        num_traj = num_traj if num_traj is not None else sim_config["num_sim_trajectories"]
+
+        
+        # Simulate trajectories based on configuration stored in config file
+        x_init = np.zeros((num_traj, self.system.dim))
+        bounds_str = ""
+        for i, bounds in enumerate(self.config["domain_bounds"]):
+            x_init[:, i] = np.random.uniform(*bounds, size=num_traj)
+            bounds_str += f"  x{i+1}: {bounds}\n"
+
+        t_vec = np.arange(T_0, T_end, dt)
+        num_steps = len(t_vec)
+
+        print("Simulating trajectories ...")
+        @timer
+        def sim():
+            sim_traj = np.zeros((num_traj, num_steps, self.system.dim))
+            sim_traj[:, 0, :] = x_init
+            U_used = np.zeros((num_traj, num_steps, self.system.num_u))
+
+            for i in range(1, num_steps):
+                x = sim_traj[:, i-1, :]
+                u = controller(x, **kwargs)
+                U_used[:, i-1, :] = u.T
+                sim_traj[:, i, :] = integralRK4(self.system.ff, x, u, dt)
+        
+            return sim_traj, U_used
+
+        sim_traj, controls = sim()
+        print("Simulation is Done!")
 
         if self.stream:
             self.stream(f"Generating Simulated Trajectory to Train a Koopman Model")

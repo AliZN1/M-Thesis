@@ -5,5 +5,5 @@ the module combines KRTB tool for computing reach-time bounds and pyKoopman libr
 """
 
 from .KoopmanPlot import *
-from .ModelTrainer import KoopmanModelTrainer, GenerateReport
+from .ModelTrainer import KoopmanModelTrainer, GenerateReport, integralRK4
 from .KoopmanAnalysis import KoopmanAnalysis

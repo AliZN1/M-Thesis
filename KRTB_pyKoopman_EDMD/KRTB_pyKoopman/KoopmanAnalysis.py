@@ -6,7 +6,7 @@ from krtb import (
     load_benchmark_config,
      create_system_from_config
 )
-from .ModelTrainer import simulate, formDataSnapshots, timer
+from .ModelTrainer import simulate, formDataSnapshots, timer, integralRK4
 from .KoopmanPlot import reachabilityWithSimulation, reachabilityWithSimulationMultiD,isStateInLimit
 
 
@@ -107,6 +107,53 @@ class KRTBInterface:
             else:
                 reachabilityWithSimulation(self.system, init_set, tar_set, final_time, deltaT)
     
+    def verifyReachabilityWithSim_c(self, controller, n_samples, final_time, start_time=0, deltaT=0.01, initial_set=None, target_set=None, seed=None, **kwargs):
+        # sample initial and target sets
+        if not initial_set:
+            initial_set = self.config["initial_sets"]
+        if not target_set:
+            target_set = self.config["verification"]["target_sets"]
+
+        bounds = target_set[0]["bounds"]
+
+        t_0 = time.time()
+        initial_samples = sample_sets(initial_set, n_samples, seed)
+        
+        t_vec = np.arange(start_time, final_time, deltaT)
+        num_steps = len(t_vec)
+        num_traj = initial_samples.shape[0]
+
+        sim_traj = np.zeros((num_traj, num_steps, self.system.dim))
+        sim_traj[:, 0, :] = initial_samples
+        
+        U = np.zeros((num_traj, num_steps, 1))
+        for i in range(1, num_steps):
+            x = sim_traj[:, i-1, :]
+            u = controller(x, **kwargs)
+            U[:, i-1, :] = u.T
+            sim_traj[:, i, :] = integralRK4(self.system.ff, x, u, deltaT)
+        
+        time_reach = np.full(sim_traj.shape[0], np.nan)
+        for traj_idx, traj in enumerate(sim_traj):
+            for step, state in enumerate(traj):
+                if isStateInLimit(state, bounds):
+                    time_reach[traj_idx] = step * deltaT
+                    break
+        t_end = time.time()
+
+        if self.stream:
+            self.stream("Result of reachability with simulation\n")
+            if np.isnan(time_reach).any():
+                self.stream(f"Exist a trajectory that doesn't reach the target set in the given simulation time.")
+            else:
+                self.stream(f"All trajectories reach the target set with in time bound [{time_reach.min():.3f}, {time_reach.max():.3f}]")
+
+            self.stream(f" Process runtime (sec): {t_end-t_0:.6f}")
+            self.stream("="*60)
+
+        return sim_traj, U
+
+
 
 class KoopmanAnalysis(KRTBInterface):
     def __init__(self, config_path, pk_model, stream=None):

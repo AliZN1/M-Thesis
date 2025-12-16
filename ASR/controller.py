@@ -6,7 +6,7 @@ def wrap_angle(angle):
     return (angle + np.pi) % (2*np.pi) - np.pi
 
 class KoopmanMPC:
-    def __init__(self, pk_model, u_min, u_max, n_horizon=10):
+    def __init__(self, pk_model, R, Q, u_min, u_max, n_horizon=10):
         self.lift = pk_model.observables.transform
         self.A = pk_model.A # (nz, nz)
         self.B = pk_model.B # (nz, nu)
@@ -17,8 +17,8 @@ class KoopmanMPC:
         self.nu = self.B.shape[1]
         
         self.Np = n_horizon
-        self.Q = np.diag([1.0, 1.0, 1.0])
-        self.R = np.diag([0.01, 0.25])
+        self.Q = Q
+        self.R = R
 
         self.u_min = u_min
         self.u_max = u_max
@@ -27,12 +27,7 @@ class KoopmanMPC:
         if x_ref is None:
             x_ref = np.zeros((self.nx, self.Np))
 
-        # =======
-        x_ref_wrapped = x_ref.copy()
-        x_ref_wrapped[2, :] = wrap_angle(x_ref[2, :])
-        # =======
-
-        z0 = self.lift(x0).squeeze()
+        z0 = self.lift(x0.reshape(1, -1)).squeeze()
 
         z_var = cp.Variable((self.nz, self.Np+1))
         u_var = cp.Variable((self.nu, self.Np))
@@ -52,10 +47,10 @@ class KoopmanMPC:
 
             # Stage cost: (x_k - x_ref_k)' Q (x_k - x_ref_k) + u'Ru
             cost += cp.quad_form(x_k - x_ref[:, k], self.Q) + cp.quad_form(u_var[:, k], self.R)
-
-            #terminal const on x_Np
-            # x_N = self.C @ z_var[:, self.Np]
-            # cost += cp.quad_form(x_N - x_ref[:, -1], self.Q/100)
+            
+        #terminal const on x_Np
+        x_N = self.C @ z_var[:, self.Np]
+        cost += cp.quad_form(x_N - x_ref[:, -1], self.Q * 5)
 
 
         problem = cp.Problem(cp.Minimize(cost), constraints)

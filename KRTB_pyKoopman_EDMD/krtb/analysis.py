@@ -357,6 +357,9 @@ def compute_reach_time_bounds(ef0_vals, efF_vals, lams, itol=1e-3):
         bounds.append((this_intersection.lower, this_intersection.upper))
         i = i + 1
 
+        if i > 10_000:
+            raise RuntimeError("Loop did not converge")
+
     if len(bounds) == 0:
         return [], ("UNREACHABLE", 0)
 

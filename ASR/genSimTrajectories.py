@@ -2,7 +2,7 @@ import sys, os
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
-package_root = project_root / "EDMD" /"KRTB_pyKoopman_EDMD"
+package_root = project_root / "KRTB_pyKoopman_EDMD"
 sys.path.insert(0, str(package_root))
 
 import numpy as np
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from ASR import custom_obs
 import pykoopman as pk
 from pykoopman import observables, regression
-from KRTB_pyKoopman import KoopmanModelTrainer, KoopmanAnalysis
+from KRTB_pyKoopman import KoopmanModelTrainer, KoopmanAnalysis, integralRK4
 from controller import KoopmanMPC
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -125,31 +125,33 @@ def main():
 
 
     # ----------------- test KMPC
-    traj = states[1000, :, :] # training trajectory
+    traj = states[5] # test trajectory
     # traj = np.zeros((250, 3))
     # traj[:, 0] = np.linspace(0, 5, 250)
     # traj[:, 1] = traj[:, 0]
     # traj[:, 2] = np.full(250, np.pi/4)
     
-    kmpc = KoopmanMPC(pk_model, u_min=np.array([0, -np.pi/6]), u_max=np.array([2, np.pi/6]), n_horizon=5)
+    Q = np.diag([1.0, 1.0, 10.0, 1.0])
+    R = np.diag([0.01, 0.22])
+    kmpc = KoopmanMPC(pk_model, R, Q, u_min=np.array([0, -np.pi/6]), u_max=np.array([2, np.pi/6]), n_horizon=10)
     
     dt = 0.05
     px = []
     py = []
-    x = traj[0, :].reshape(1, 3)
+    x = traj[0, :]
     for i in range(traj.shape[0]):
         x_ref = build_reference(traj, i, kmpc.Np)
         u = kmpc.run(x, x_ref)
-        # print(u)
-        dx = kmt.system.ff(x, u).T
-        x_new = x + dx * dt
-        px.append(x_new[0, 0])
-        py.append(x_new[0, 1])
-        x = x_new
+        print(u)
+        x = integralRK4(kmt.system.ff, x.reshape(1, -1), u, dt).flatten()
+        px.append(x[0])
+        py.append(x[1])
 
 
-    plt.scatter(px, py)
-    plt.plot(traj[:, 0], traj[:, 1], '--r')
+    plt.scatter(px, py, label="MPC")
+    plt.plot(traj[:, 0], traj[:, 1], '--r', label="True")
+    plt.legend()
+    plt.tight_layout()
     plt.show()
 
 

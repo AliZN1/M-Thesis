@@ -7,9 +7,10 @@
         "type": "nonlinear_controlled",
         "dynamics": {
             "equations": [
-                "u1 * cos(x3)",
-                "u1 * sin(x3)",
-                "u1 * tan(u2) / 0.3"
+                "x4 * cos(x3)",
+                "x4 * sin(x3)",
+                "x4 * tan(u2) / 0.3",
+                "u1"
             ]
         },
         "num_inputs": 2
@@ -28,7 +29,8 @@
     "domain_bounds": [
         [-10, 10],
         [-10, -10],
-        [-3.141592653589793, 3.141592653589793]
+        [-3.141592653589793, 3.141592653589793],
+        [0, 2]
     ],
     "verification": {
         "target_sets": [
@@ -46,7 +48,7 @@
         "expected_result": "reachable"
     },
     "simulation": {
-        "num_sim_trajectories": 30000,
+        "num_sim_trajectories": 10000,
         "start_time": 0,
         "final_time": 5,
         "time_step": 0.05
