@@ -18,11 +18,11 @@ class KRTBInterface:
 
         self.stream = stream
 
-    def timeReachBound(self, valid_ef_idx = np.array([]), n_samples=100, initial_sets=None, target_sets=None, rand_seed=None):
+    def timeReachBound(self, valid_ef_idx = np.array([]), n_samples=100, initial_sets=None, target_sets=None, rand_seed=None, stream_off=False):
         # sample initial and target sets
-        if not initial_sets:
+        if initial_sets is None:
             initial_sets = self.config["initial_sets"]
-        if not target_sets:
+        if target_sets is None:
             target_sets = self.config["verification"]["target_sets"]
 
         initial_samples = sample_sets(initial_sets, n_samples, rand_seed)
@@ -62,7 +62,7 @@ class KRTBInterface:
             res_str += "No reachable time intervals found.\n"
 
 
-        if self.stream:
+        if self.stream is not None and not stream_off: 
             self.stream("Reach-Time bound Analysis\n")
             self.stream(f"Status: {status}")
             self.stream(res_str)

@@ -22,7 +22,8 @@ def sample_level_set(level_set_def, num_samples, random_seed=None):
     np.random.seed(random_seed)  # For reproducibility
 
     func_str = level_set_def["function"].replace("^", "**")  # Fix for Python
-    domain = level_set_def.get("domain", [[-3, 3], [-3, 3]])
+    # domain = level_set_def.get("domain", [[-3, 3], [-3, 3]])
+    domain = level_set_def["bounds"]
     dimension = len(domain)
 
     allowed_funcs = {
@@ -76,7 +77,7 @@ def sample_level_set(level_set_def, num_samples, random_seed=None):
             print(f"Could not evaluate grid diagnostics: {e}")
         return np.array([]).reshape(0, dimension)
 
-    print(f"Level set sampling: {len(samples)} valid samples from {attempts} attempts")
+    # print(f"Level set sampling: {len(samples)} valid samples from {attempts} attempts")
     return np.array(samples)
 
 
